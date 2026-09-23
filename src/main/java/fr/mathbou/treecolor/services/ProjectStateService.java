@@ -17,7 +17,6 @@
 
 package fr.mathbou.treecolor.services;
 
-import com.intellij.configurationStore.StateStorageManagerKt;
 import com.intellij.ide.ui.LafManager;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.components.*;
@@ -41,12 +40,13 @@ import fr.mathbou.treecolor.state.beans.ProjectState;
 import fr.mathbou.treecolor.utils.ColorVariantUtil;
 import fr.mathbou.treecolor.utils.UIUtils;
 import org.jdom.Element;
+import org.jdom.JDOMException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.*;
+import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.util.*;
 import java.util.List;
 
@@ -58,7 +58,6 @@ public class ProjectStateService implements PersistentStateComponent<ProjectStat
     private static final String CURRENT_COMPONENT_NAME = "ProjectTreeColorEnhanced";
     private static final String LEGACY_COMPONENT_NAME = "ProjectTreeColorHighlighter";
 
-    private final AppStateService appStateService = AppStateService.getInstance();
     private final Project project;
 
     private final ProjectState state = new ProjectState();
@@ -128,13 +127,7 @@ public class ProjectStateService implements PersistentStateComponent<ProjectStat
      * Used for keeping our state file always-up-to-date
      */
     public void saveState() {
-        try {
-            Method saveComponentManager = StateStorageManagerKt.class
-                .getMethod("saveComponentManager", ComponentManager.class, boolean.class);
-            saveComponentManager.invoke(null, project, true);
-        } catch (Exception ignored) {
-            LOG.debug("Can't force save state in older versions prior to 191.4212.41");
-        }
+        project.save();
     }
 
     public MarkType getMarkType() {
@@ -151,31 +144,35 @@ public class ProjectStateService implements PersistentStateComponent<ProjectStat
             return;
         }
 
-        Element legacyComponent = getComponentByName(root, LEGACY_COMPONENT_NAME);
-        Element legacyColorComponent = getComponentWithLegacyColorFormat(root);
-
-        List<ColorSettings> migratedColorSettings = migrateLegacyColors(
-            legacyColorComponent != null ? legacyColorComponent.getChild("colors") : null
-        );
-        List<HighlightedFile> migratedFiles = migrateLegacyFiles(
-            legacyComponent != null ? legacyComponent.getChild("files") : null
-        );
-
-        boolean didMigrateColors = !migratedColorSettings.isEmpty() && (isUsingDefaultColorSettings() || hasMissingThemeVariants());
-        boolean didMigrateFiles = mergeLegacyFiles(migratedFiles);
-
-        if (!didMigrateColors && !didMigrateFiles) {
+        if (getComponentByName(root, CURRENT_COMPONENT_NAME) != null) {
             return;
         }
+
+        Element legacyComponent = getComponentByName(root, LEGACY_COMPONENT_NAME);
+        if (legacyComponent == null) {
+            return;
+        }
+
+        List<ColorSettings> migratedColorSettings = migrateLegacyColors(
+            legacyComponent.getChild("colors")
+        );
+        List<HighlightedFile> migratedFiles = migrateLegacyFiles(
+            legacyComponent.getChild("files")
+        );
+
+        boolean didMigrateColors = !migratedColorSettings.isEmpty()
+            && (isUsingDefaultColorSettings() || hasMissingThemeVariants());
+        boolean didMigrateFiles = mergeLegacyFiles(migratedFiles);
 
         if (didMigrateColors) {
             state.colorSettingsList = migratedColorSettings;
         }
 
         saveState();
-        UIUtils.updateUI(project);
-        String sourceComponentName = legacyColorComponent != null ? legacyColorComponent.getAttributeValue("name") : LEGACY_COMPONENT_NAME;
-        LOG.info("Migrated legacy state from component '" + sourceComponentName + "' for project " + project.getName());
+        if (didMigrateColors || didMigrateFiles) {
+            UIUtils.updateUI(project);
+            LOG.info("Migrated legacy state from component '" + LEGACY_COMPONENT_NAME + "' for project " + project.getName());
+        }
     }
 
     private boolean mergeLegacyFiles(@NotNull List<HighlightedFile> legacyFiles) {
@@ -252,7 +249,7 @@ public class ProjectStateService implements PersistentStateComponent<ProjectStat
 
         try (InputStream inputStream = configFile.getInputStream()) {
             return JDOMUtil.load(inputStream);
-        } catch (Exception ignored) {
+        } catch (IOException | JDOMException ignored) {
             LOG.debug("Unable to read legacy state component");
         }
 
@@ -267,38 +264,6 @@ public class ProjectStateService implements PersistentStateComponent<ProjectStat
             }
         }
         return null;
-    }
-
-    @Nullable
-    private Element getComponentWithLegacyColorFormat(@NotNull Element root) {
-        Element currentComponent = getComponentByName(root, CURRENT_COMPONENT_NAME);
-        if (hasLegacyColorFormat(currentComponent)) {
-            return currentComponent;
-        }
-
-        Element legacyComponent = getComponentByName(root, LEGACY_COMPONENT_NAME);
-        if (hasLegacyColorFormat(legacyComponent)) {
-            return legacyComponent;
-        }
-
-        return null;
-    }
-
-    private boolean hasLegacyColorFormat(@Nullable Element component) {
-        if (component == null) {
-            return false;
-        }
-        Element colors = component.getChild("colors");
-        if (colors == null) {
-            return false;
-        }
-        for (Element node : colors.getChildren("color")) {
-            String legacyValue = node.getAttributeValue("value");
-            if (legacyValue != null && !legacyValue.isBlank()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean hasMissingThemeVariants() {

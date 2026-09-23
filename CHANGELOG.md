@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 2.2.0
+- Avoided repeating legacy project-state migration when `ProjectTreeColorEnhanced` data is already present.
+
 ## 2.1.0
 - Added automatic migration on plugin load for legacy `highlightedFiles.xml` data from `ProjectTree Color Highlighter`.
 
