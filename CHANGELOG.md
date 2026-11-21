@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 3.0.0
+- Dropped support for IDE versions before 2026.3 and moved the build to Java 25.
+- Updated Gradle to 9.9.1 and the IntelliJ Platform Gradle Plugin to 2.20.1.
+
 ## 2.2.0
 - Avoided repeating legacy project-state migration when `ProjectTreeColorEnhanced` data is already present.
 

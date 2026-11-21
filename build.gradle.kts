@@ -1,19 +1,21 @@
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.changelog.Changelog
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 
 plugins {
     kotlin("jvm") version "2.3.20"
-    id("org.jetbrains.intellij.platform") version "2.14.0"
+    id("org.jetbrains.intellij.platform") version "2.20.1"
     id("org.jetbrains.changelog") version "2.5.0"
 }
 
 group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
+val platformVersion = providers.gradleProperty("platformVersion")
 
 // Set the JVM language level used to build the project.
 kotlin {
     jvmToolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
         vendor = JvmVendorSpec.JETBRAINS
     }
 }
@@ -29,8 +31,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        val version = providers.gradleProperty("platformVersion")
-        intellijIdea(version) {useInstaller = false}
+        intellijIdea(platformVersion) {useInstaller = false}
 
         pluginVerifier()
         zipSigner()
@@ -46,6 +47,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceVersion")
+            untilBuild = providers.gradleProperty("pluginUntilVersion")
         }
 
         description = providers.fileContents(layout.projectDirectory.file("README.md")).asText.map {
@@ -82,6 +84,7 @@ intellijPlatform {
     pluginVerification {
         ides {
             recommended()
+            create(IntelliJPlatformType.IntellijIdea, "2026.3")
         }
     }
 }
@@ -98,9 +101,9 @@ tasks {
     }
 
     withType<JavaCompile> {
-        options.release = 21
-        sourceCompatibility = "21"
-        targetCompatibility = "21"
+        options.release = 25
+        sourceCompatibility = "25"
+        targetCompatibility = "25"
     }
 
     publishPlugin {
